@@ -13,7 +13,7 @@ class PromptName(str, Enum):
 
 class LLMRequest(BaseModel):
     """Request model for the /ask-llm endpoint."""
-    prompt_name: Optional[PromptName] = Field(None, description="Reference to a server-stored prompt template")
+    prompt_name: Optional[str] = Field(None, description="Reference to a server-stored prompt template")
     prompt_text: Optional[str] = Field(None, description="Direct prompt text (used if prompt_name not provided)")
     data: Optional[Dict[str, Any]] = Field(default={}, description="Dictionary for variable substitution in prompts")
     model: Optional[str] = Field(None, description="Specific model to use for the request")
