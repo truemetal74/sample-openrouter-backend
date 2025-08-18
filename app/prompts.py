@@ -148,3 +148,167 @@ Please provide a comprehensive and accurate answer based on the information prov
             PromptName.CODE_REVIEW: "Review code for quality, security, and best practices",
             PromptName.GENERAL_QUESTION: "Answer general questions with comprehensive responses"
         }
+    
+    @classmethod
+    def add_prompt(cls, prompt_name: str, prompt_template: str, description: str = None) -> bool:
+        """
+        Add a new prompt template dynamically.
+        
+        Args:
+            prompt_name: Name of the new prompt template
+            prompt_template: The prompt template string with variable placeholders
+            description: Optional description of the prompt template
+            
+        Returns:
+            True if prompt was added successfully, False otherwise
+            
+        Raises:
+            ValueError: If prompt_name already exists or template is invalid
+        """
+        try:
+            # Check if prompt already exists
+            if prompt_name in cls.PROMPTS:
+                raise ValueError(f"Prompt '{prompt_name}' already exists")
+            
+            # Validate template format (basic check for variable placeholders)
+            import re
+            variable_pattern = r'\{(\w+)\}'
+            variables = re.findall(variable_pattern, prompt_template)
+            
+            if not variables:
+                logger.warning(f"Prompt template '{prompt_name}' has no variable placeholders")
+            
+            # Add the new prompt
+            cls.PROMPTS[prompt_name] = prompt_template
+            
+            # Log the addition
+            logger.info(f"Added new prompt template '{prompt_name}' with {len(variables)} variables: {variables}")
+            
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error adding prompt '{prompt_name}': {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+    
+    @classmethod
+    def remove_prompt(cls, prompt_name: str) -> bool:
+        """
+        Remove a prompt template.
+        
+        Args:
+            prompt_name: Name of the prompt template to remove
+            
+        Returns:
+            True if prompt was removed successfully, False otherwise
+            
+        Raises:
+            ValueError: If prompt_name doesn't exist or is a built-in prompt
+        """
+        try:
+            # Check if prompt exists
+            if prompt_name not in cls.PROMPTS:
+                raise ValueError(f"Prompt '{prompt_name}' does not exist")
+            
+            # Prevent removal of built-in prompts
+            built_in_prompts = {PromptName.COMPANY_ANALYSIS, PromptName.TEXT_SUMMARY, 
+                               PromptName.CODE_REVIEW, PromptName.GENERAL_QUESTION}
+            
+            if prompt_name in built_in_prompts:
+                raise ValueError(f"Cannot remove built-in prompt '{prompt_name}'")
+            
+            # Remove the prompt
+            removed_template = cls.PROMPTS.pop(prompt_name)
+            
+            # Log the removal
+            logger.info(f"Removed prompt template '{prompt_name}'")
+            
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error removing prompt '{prompt_name}': {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+    
+    @classmethod
+    def update_prompt(cls, prompt_name: str, new_template: str, new_description: str = None) -> bool:
+        """
+        Update an existing prompt template.
+        
+        Args:
+            prompt_name: Name of the prompt template to update
+            new_template: The new prompt template string
+            new_description: Optional new description
+            
+        Returns:
+            True if prompt was updated successfully, False otherwise
+            
+        Raises:
+            ValueError: If prompt_name doesn't exist or template is invalid
+        """
+        try:
+            # Check if prompt exists
+            if prompt_name not in cls.PROMPTS:
+                raise ValueError(f"Prompt '{prompt_name}' does not exist")
+            
+            # Validate new template format
+            import re
+            variable_pattern = r'\{(\w+)\}'
+            variables = re.findall(variable_pattern, new_template)
+            
+            if not variables:
+                logger.warning(f"Updated prompt template '{prompt_name}' has no variable placeholders")
+            
+            # Store old template for logging
+            old_template = cls.PROMPTS[prompt_name]
+            
+            # Update the prompt
+            cls.PROMPTS[prompt_name] = new_template
+            
+            # Log the update
+            logger.info(f"Updated prompt template '{prompt_name}' with {len(variables)} variables: {variables}")
+            
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error updating prompt '{prompt_name}': {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+    
+    @classmethod
+    def get_prompt_info(cls, prompt_name: str) -> Dict[str, Any]:
+        """
+        Get detailed information about a prompt template.
+        
+        Args:
+            prompt_name: Name of the prompt template
+            
+        Returns:
+            Dictionary containing prompt information
+            
+        Raises:
+            ValueError: If prompt_name doesn't exist
+        """
+        if prompt_name not in cls.PROMPTS:
+            raise ValueError(f"Prompt '{prompt_name}' does not exist")
+        
+        template = cls.PROMPTS[prompt_name]
+        
+        # Extract variables from template
+        import re
+        variable_pattern = r'\{(\w+)\}'
+        variables = re.findall(variable_pattern, template)
+        
+        # Determine if it's a built-in prompt
+        built_in_prompts = {PromptName.COMPANY_ANALYSIS, PromptName.TEXT_SUMMARY, 
+                           PromptName.CODE_REVIEW, PromptName.GENERAL_QUESTION}
+        is_built_in = prompt_name in built_in_prompts
+        
+        return {
+            "name": prompt_name,
+            "template": template,
+            "variables": variables,
+            "variable_count": len(variables),
+            "is_built_in": is_built_in,
+            "description": cls.list_available_prompts().get(prompt_name, "No description available")
+        }

@@ -7,6 +7,7 @@ from app.models import LLMRequest, LLMResponse, AccessToken
 from app.services import LLMService
 from app.auth import AuthManager, get_current_user
 from app.logging_middleware import extract_request_id
+from app.prompts import PromptManager
 
 from app.exceptions import (
     BaseAppException, ValidationError, AuthenticationError, 
@@ -239,7 +240,7 @@ async def get_current_user_dependency(credentials: HTTPAuthorizationCredentials 
         )
 
 
-@app.post("/ask-llm", response_model=LLMResponse)
+@app.post("/ask-llm", response_model=LLMResponse, tags=["llm"])
 async def ask_llm(
     request: LLMRequest,
     current_user: str = Depends(get_current_user_dependency)
@@ -287,7 +288,7 @@ async def ask_llm(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post("/auth/token", response_model=AccessToken)
+@app.post("/auth/token", response_model=AccessToken, tags=["authentication"])
 async def create_access_token(user_id: str):
     """
     Create a new access token for a user.
@@ -313,7 +314,7 @@ async def create_access_token(user_id: str):
         raise HTTPException(status_code=500, detail="Failed to create access token")
 
 
-@app.get("/prompts")
+@app.get("/prompts", tags=["prompts"])
 async def list_prompts(current_user: str = Depends(get_current_user_dependency)):
     """Get list of available prompt templates."""
     try:
@@ -331,7 +332,7 @@ async def list_prompts(current_user: str = Depends(get_current_user_dependency))
         raise HTTPException(status_code=500, detail="Failed to list prompts")
 
 
-@app.get("/models")
+@app.get("/models", tags=["models"])
 async def list_models(current_user: str = Depends(get_current_user_dependency)):
     """Get list of available OpenRouter models."""
     try:
@@ -349,13 +350,130 @@ async def list_models(current_user: str = Depends(get_current_user_dependency)):
         raise HTTPException(status_code=500, detail="Failed to list models")
 
 
-@app.get("/health")
+@app.post("/prompts/add", tags=["prompts"])
+async def add_prompt(
+    prompt_name: str,
+    prompt_template: str,
+    description: str = None,
+    current_user: str = Depends(get_current_user_dependency)
+):
+    """Add a new prompt template."""
+    try:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Adding prompt '{prompt_name}' for user: {current_user}")
+        
+        success = PromptManager.add_prompt(prompt_name, prompt_template, description)
+        
+        if success:
+            logger.info(f"Prompt '{prompt_name}' added successfully by user: {current_user}")
+            return {
+                "success": True,
+                "message": f"Prompt '{prompt_name}' added successfully",
+                "prompt_name": prompt_name
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to add prompt")
+            
+    except ValueError as e:
+        logger.warning(f"Validation error adding prompt for user {current_user}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error adding prompt for user {current_user}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to add prompt")
+
+
+@app.put("/prompts/update", tags=["prompts"])
+async def update_prompt(
+    prompt_name: str,
+    new_template: str,
+    new_description: str = None,
+    current_user: str = Depends(get_current_user_dependency)
+):
+    """Update an existing prompt template."""
+    try:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Updating prompt '{prompt_name}' for user: {current_user}")
+        
+        success = PromptManager.update_prompt(prompt_name, new_template, new_description)
+        
+        if success:
+            logger.info(f"Prompt '{prompt_name}' updated successfully by user: {current_user}")
+            return {
+                "success": True,
+                "message": f"Prompt '{prompt_name}' updated successfully",
+                "prompt_name": prompt_name
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update prompt")
+            
+    except ValueError as e:
+        logger.warning(f"Validation error updating prompt for user {current_user}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating prompt for user {current_user}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update prompt")
+
+
+@app.delete("/prompts/remove", tags=["prompts"])
+async def remove_prompt(
+    prompt_name: str,
+    current_user: str = Depends(get_current_user_dependency)
+):
+    """Remove a prompt template."""
+    try:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Removing prompt '{prompt_name}' for user: {current_user}")
+        
+        success = PromptManager.remove_prompt(prompt_name)
+        
+        if success:
+            logger.info(f"Prompt '{prompt_name}' removed successfully by user: {current_user}")
+            return {
+                "success": True,
+                "message": f"Prompt '{prompt_name}' removed successfully",
+                "prompt_name": prompt_name
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to remove prompt")
+            
+    except ValueError as e:
+        logger.warning(f"Validation error removing prompt for user {current_user}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error removing prompt for user {current_user}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to remove prompt")
+
+
+@app.get("/prompts/{prompt_name}/info", tags=["prompts"])
+async def get_prompt_info(
+    prompt_name: str,
+    current_user: str = Depends(get_current_user_dependency)
+):
+    """Get detailed information about a specific prompt template."""
+    try:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Getting info for prompt '{prompt_name}' for user: {current_user}")
+        
+        prompt_info = PromptManager.get_prompt_info(prompt_name)
+        
+        logger.info(f"Prompt info retrieved for '{prompt_name}' by user: {current_user}")
+        return prompt_info
+        
+    except ValueError as e:
+        logger.warning(f"Validation error getting prompt info for user {current_user}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error getting prompt info for user {current_user}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get prompt info")
+
+
+@app.get("/health", tags=["system"])
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "Sample OpenRouter Backend"}
 
 
-@app.get("/")
+@app.get("/", tags=["system"])
 async def root():
     """Root endpoint with service information."""
     return {
@@ -365,6 +483,12 @@ async def root():
             "ask_llm": "/ask-llm",
             "auth": "/auth/token",
             "prompts": "/prompts",
+            "prompt_management": {
+                "add": "/prompts/add",
+                "update": "/prompts/update", 
+                "remove": "/prompts/remove",
+                "info": "/prompts/{prompt_name}/info"
+            },
             "models": "/models",
             "health": "/health"
         }

@@ -163,10 +163,23 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ### Available Endpoints
 
+#### LLM Operations
 - `POST /ask-llm` - Main LLM interaction endpoint
+
+#### Authentication
 - `POST /auth/token` - Generate access token
+
+#### Prompt Management
 - `GET /prompts` - List available prompt templates
+- `POST /prompts/add` - Add new prompt template
+- `PUT /prompts/update` - Update existing prompt template
+- `DELETE /prompts/remove` - Remove prompt template
+- `GET /prompts/{prompt_name}/info` - Get detailed prompt information
+
+#### Models
 - `GET /models` - List available OpenRouter models
+
+#### System
 - `GET /health` - Health check
 - `GET /` - Service information
 - `GET /docs` - Interactive API documentation (Swagger UI)
@@ -290,6 +303,38 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
      http://localhost:8080/ask-llm
 ```
 
+### Prompt Management Examples
+
+#### Add a New Prompt Template
+```bash
+curl -X POST "http://localhost:8080/prompts/add" \
+     -H "Authorization: Bearer YOUR_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "prompt_name": "custom_analysis",
+       "prompt_template": "Analyze {topic} with focus on {focus}",
+       "description": "Custom analysis template"
+     }'
+```
+
+#### Update an Existing Prompt
+```bash
+curl -X PUT "http://localhost:8080/prompts/update" \
+     -H "Authorization: Bearer YOUR_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "prompt_name": "custom_analysis",
+       "new_template": "Comprehensive analysis of {topic} focusing on {focus}",
+       "new_description": "Enhanced analysis template"
+     }'
+```
+
+#### Get Prompt Information
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+     "http://localhost:8080/prompts/custom_analysis/info"
+```
+
 ## 📁 Project Structure
 
 ```
@@ -309,6 +354,7 @@ sample-openrouter-backend/
 │   └── services.py        # Business logic services
 ├── scripts/
 │   ├── generate_token.py  # Token generation utility
+│   ├── manage_prompts.py  # Prompt management utility
 │   ├── setup.bat          # Windows setup script
 │   └── setup.ps1          # PowerShell setup script
 ├── Dockerfile             # Docker configuration
@@ -327,6 +373,7 @@ sample-openrouter-backend/
 - **`app/api.py`**: Main FastAPI application with all endpoints and middleware configuration
 - **`app/services.py`**: Business logic layer for LLM interactions
 - **`app/openrouter_client.py`**: Client for OpenRouter API integration
+- **`app/prompts.py`**: Prompt management system with dynamic template support
 
 ## 🤝 Contributing
 
