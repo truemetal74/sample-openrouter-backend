@@ -1,0 +1,67 @@
+Create a FastAPI application that provides a single API endpoint for LLM interactions via OpenRouter. The  application should be production-ready with proper error handling, rate limiting, and retry mechanisms.
+
+  Core Requirements
+
+  1. Single API Endpoint: /ask-llm
+
+  Create a POST endpoint that accepts:
+  - prompt_name (optional): Reference to a server-stored prompt template
+  - prompt_text (optional): Direct prompt text (used if prompt_name not provided)
+  - data (optional): Dictionary for variable substitution in prompts
+
+  Example requests:
+  {
+    "prompt_text": "Analyze this company: {company_name} in {industry}",
+    "data": {"company_name": "TechCorp", "industry": "Software"}
+  }
+
+   Implementation Details
+Usy Python 3.13, FastAPI, Pydantic v2, Pydantic-settings, Docker, prepare deployment script for GCP
+
+
+  4. OpenRouter Integration Features
+
+Allow multiple models to be configured via settings - and pass the list to OpenRouter via “models” parameter 
+  - HTTP Client Management: Persistent async HTTP client with proper cleanup
+  - Rate Limit Handling: Automatic retry on 429 errors with exponential backoff
+  - Error Handling: Comprehensive error parsing and logging
+  - Token Usage Tracking: Log token consumption for monitoring
+  - Timeout Handling: 30-second request timeout with proper error handling
+
+  5. Rate Limiting Implementation
+
+  - Use SlowAPI (FastAPI wrapper for python-limiter) - this is a basic implementation for now
+  - Configure limits: 10 requests per minute per IP default (configured in settings)
+  - Custom error responses for rate limit violations
+  - Whitelist functionality for trusted IPs
+
+  6. Prompt Management System
+
+  - Server-side prompt storage with variable substitution using Python's str.format()
+  - Enum-based prompt names for type safety
+  - Validation for required variables in prompts
+  - Support for both stored prompts and direct text input
+
+  7. Settings Configuration
+
+Use Pydantic BaseSettings, when providing example configuration ensure proper formatting of List[str] values for parameters like OPENROUTER_MODELS - it should be [“a”,”b”,”c”]
+
+
+  8. Error Handling & Logging
+
+  - Structured logging with request IDs for tracing
+  - Custom exception classes for different error types
+  - Proper HTTP status codes (429 for rate limits, 500 for server errors)
+  - Sanitized error responses (don't expose internal details)
+
+  9. Security Features
+
+  - Input validation and sanitization
+  - Request size limits
+  - Prevent prompt injection attacks
+ - Authentication via access token (JWT) - for now allow any user with a valid token to call API methods. Provide a command-line utility to generate new access tokens (with arbitrary expiration date)
+  - API key protection (never log or expose)
+
+  10. Retry Logic Implementation
+
+  Ensure the HTTP code 429 (rate limit) returned by OpenAI is handled properly and the full details of the response are logged for troubleshooting. Attempt to re-try the request several times (max to be provided as a config setting) after delays.
