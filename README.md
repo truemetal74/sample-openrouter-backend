@@ -79,7 +79,7 @@ CORS_ALLOW_HEADERS=["*"]
 ### Development Mode
 ```bash
 # Windows
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
 # Or use the main module
 python app/main.py
@@ -87,7 +87,7 @@ python app/main.py
 
 ### Production Mode
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
 ### Using Docker
@@ -97,7 +97,7 @@ docker-compose up --build
 
 # Or build and run manually
 docker build -t sample-openrouter-backend .
-docker run -p 8000:8000 --env-file .env sample-openrouter-backend
+docker run -p 8080:8080 --env-file .env sample-openrouter-backend
 ```
 
 ## 🔑 Authentication
@@ -123,7 +123,7 @@ Include the token in your API requests:
 curl -H "Authorization: Bearer YOUR_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"prompt_text": "Hello, how are you?"}' \
-     http://localhost:8000/ask-llm
+     http://localhost:8080/ask-llm
 ```
 
 ## 📡 API Usage
@@ -279,7 +279,7 @@ The application includes a custom HTTP logging middleware that provides:
 
 ### Health Check
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8080/health
 ```
 
 ### Test with Stored Prompt
@@ -287,7 +287,7 @@ curl http://localhost:8000/health
 curl -H "Authorization: Bearer YOUR_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"prompt_name": "general_question", "data": {"question": "What is 2+2?"}}' \
-     http://localhost:8000/ask-llm
+     http://localhost:8080/ask-llm
 ```
 
 ## 📁 Project Structure
