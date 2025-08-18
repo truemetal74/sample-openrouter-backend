@@ -1,10 +1,9 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
-httpx==0.25.2
+fastapi==0.115.*
+uvicorn[standard]==0.35.*
+pydantic==2.11.*
+pydantic-settings==2.*
+httpx==0.28.*
 slowapi==0.1.9
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.6
-python-limiter==1.1.0
 requests==2.31.0
