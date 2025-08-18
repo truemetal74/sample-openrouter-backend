@@ -8,9 +8,10 @@ logger = logging.getLogger(__name__)
 class PromptManager:
     """Manages server-stored prompt templates with variable substitution."""
     
-    # Server-stored prompt templates
+    # Server-stored prompt templates with descriptions
     PROMPTS = {
-        PromptName.COMPANY_ANALYSIS: """
+        PromptName.COMPANY_ANALYSIS: {
+            "template": """
 Analyze the following company and provide insights:
 
 Company: {company_name}
@@ -24,8 +25,11 @@ Please provide:
 4. Growth opportunities
 5. Risk factors
 """,
+            "description": "Analyze a company's market position, strengths, and opportunities"
+        },
         
-        PromptName.TEXT_SUMMARY: """
+        PromptName.TEXT_SUMMARY: {
+            "template": """
 Please provide a comprehensive summary of the following text:
 
 Text: {text}
@@ -36,8 +40,11 @@ Requirements:
 - Keep the summary concise but informative
 - Preserve the original tone and style where appropriate
 """,
+            "description": "Provide comprehensive summaries of text content"
+        },
         
-        PromptName.CODE_REVIEW: """
+        PromptName.CODE_REVIEW: {
+            "template": """
 Please review the following code and provide feedback:
 
 Code:
@@ -53,8 +60,11 @@ Please provide:
 5. Best practices recommendations
 6. Overall rating (1-10)
 """,
+            "description": "Review code for quality, security, and best practices"
+        },
         
-        PromptName.GENERAL_QUESTION: """
+        PromptName.GENERAL_QUESTION: {
+            "template": """
 Please answer the following question:
 
 Question: {question}
@@ -62,7 +72,9 @@ Question: {question}
 Additional Context: {context if context else 'None provided'}
 
 Please provide a comprehensive and accurate answer based on the information provided.
-"""
+""",
+            "description": "Answer general questions with comprehensive responses"
+        }
     }
     
     @classmethod
@@ -83,7 +95,8 @@ Please provide a comprehensive and accurate answer based on the information prov
         if prompt_name not in cls.PROMPTS:
             raise ValueError(f"Unknown prompt name: {prompt_name}")
         
-        prompt_template = cls.PROMPTS[prompt_name]
+        prompt_data = cls.PROMPTS[prompt_name]
+        prompt_template = prompt_data["template"]
         data = data or {}
         
         try:
@@ -119,7 +132,8 @@ Please provide a comprehensive and accurate answer based on the information prov
         if prompt_name not in cls.PROMPTS:
             raise ValueError(f"Unknown prompt name: {prompt_name}")
         
-        prompt_template = cls.PROMPTS[prompt_name]
+        prompt_data = cls.PROMPTS[prompt_name]
+        prompt_template = prompt_data["template"]
         data = data or {}
         
         # Extract variable names from the template
@@ -143,10 +157,8 @@ Please provide a comprehensive and accurate answer based on the information prov
             Dictionary mapping prompt names to descriptions
         """
         return {
-            PromptName.COMPANY_ANALYSIS: "Analyze a company's market position, strengths, and opportunities",
-            PromptName.TEXT_SUMMARY: "Provide comprehensive summaries of text content",
-            PromptName.CODE_REVIEW: "Review code for quality, security, and best practices",
-            PromptName.GENERAL_QUESTION: "Answer general questions with comprehensive responses"
+            name: data["description"] 
+            for name, data in cls.PROMPTS.items()
         }
     
     @classmethod
@@ -179,7 +191,10 @@ Please provide a comprehensive and accurate answer based on the information prov
                 logger.warning(f"Prompt template '{prompt_name}' has no variable placeholders")
             
             # Add the new prompt
-            cls.PROMPTS[prompt_name] = prompt_template
+            cls.PROMPTS[prompt_name] = {
+                "template": prompt_template,
+                "description": description or f"Custom prompt template: {prompt_name}"
+            }
             
             # Log the addition
             logger.info(f"Added new prompt template '{prompt_name}' with {len(variables)} variables: {variables}")
@@ -260,10 +275,13 @@ Please provide a comprehensive and accurate answer based on the information prov
                 logger.warning(f"Updated prompt template '{prompt_name}' has no variable placeholders")
             
             # Store old template for logging
-            old_template = cls.PROMPTS[prompt_name]
+            old_template = cls.PROMPTS[prompt_name]["template"]
             
             # Update the prompt
-            cls.PROMPTS[prompt_name] = new_template
+            cls.PROMPTS[prompt_name] = {
+                "template": new_template,
+                "description": new_description or cls.PROMPTS[prompt_name].get("description", f"Custom prompt template: {prompt_name}")
+            }
             
             # Log the update
             logger.info(f"Updated prompt template '{prompt_name}' with {len(variables)} variables: {variables}")
@@ -292,7 +310,8 @@ Please provide a comprehensive and accurate answer based on the information prov
         if prompt_name not in cls.PROMPTS:
             raise ValueError(f"Prompt '{prompt_name}' does not exist")
         
-        template = cls.PROMPTS[prompt_name]
+        prompt_data = cls.PROMPTS[prompt_name]
+        template = prompt_data["template"]
         
         # Extract variables from template
         import re
@@ -310,5 +329,5 @@ Please provide a comprehensive and accurate answer based on the information prov
             "variables": variables,
             "variable_count": len(variables),
             "is_built_in": is_built_in,
-            "description": cls.list_available_prompts().get(prompt_name, "No description available")
+            "description": prompt_data.get("description", "No description available")
         }
