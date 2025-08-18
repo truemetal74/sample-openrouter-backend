@@ -53,7 +53,7 @@ echo 1. Run the application:
 echo    python app\main.py
 echo.
 echo 2. Run with uvicorn:
-echo    python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+echo    python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 echo.
 echo 3. Generate access token:
 echo    python scripts\generate_token.py --user-id your_user_id
@@ -61,7 +61,7 @@ echo.
 echo 4. Run with Docker:
 echo    docker-compose up --build
 echo.
-echo The application will be available at: http://localhost:8000
-echo API documentation: http://localhost:8000/docs
+echo The application will be available at: http://localhost:8080
+echo API documentation: http://localhost:8080/docs
 echo.
 pause

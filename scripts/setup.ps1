@@ -52,7 +52,7 @@ Write-Host "1. Run the application:" -ForegroundColor Cyan
 Write-Host "   python app\main.py" -ForegroundColor White
 Write-Host ""
 Write-Host "2. Run with uvicorn:" -ForegroundColor Cyan
-Write-Host "   python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000" -ForegroundColor White
+Write-Host "   python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8080" -ForegroundColor White
 Write-Host ""
 Write-Host "3. Generate access token:" -ForegroundColor Cyan
 Write-Host "   python scripts\generate_token.py --user-id your_user_id" -ForegroundColor White
@@ -60,7 +60,7 @@ Write-Host ""
 Write-Host "4. Run with Docker:" -ForegroundColor Cyan
 Write-Host "   docker-compose up --build" -ForegroundColor White
 Write-Host ""
-Write-Host "The application will be available at: http://localhost:8000" -ForegroundColor Green
-Write-Host "API documentation: http://localhost:8000/docs" -ForegroundColor Green
+Write-Host "The application will be available at: http://localhost:8080" -ForegroundColor Green
+Write-Host "API documentation: http://localhost:8080/docs" -ForegroundColor Green
 Write-Host ""
 Read-Host "Press Enter to continue"

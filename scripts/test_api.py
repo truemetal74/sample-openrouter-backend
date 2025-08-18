@@ -13,7 +13,7 @@ from datetime import datetime
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8080"
 
 
 def test_health_check():
@@ -173,7 +173,7 @@ def main():
             print("❌ Service is not responding correctly")
             return
     except requests.exceptions.ConnectionError:
-        print("❌ Cannot connect to service. Make sure it's running on http://localhost:8000")
+        print("❌ Cannot connect to service. Make sure it's running on http://localhost:8080")
         print("   Start the service with: python app/main.py")
         return
     except Exception as e:
@@ -212,7 +212,7 @@ def main():
         print("⚠️  Some tests failed. Check the output above for details.")
     
     print("\n💡 Next steps:")
-    print("1. Visit http://localhost:8000/docs for interactive API documentation")
+    print("1. Visit http://localhost:8080/docs for interactive API documentation")
     print("2. Use the token above to make authenticated requests")
     print("3. Test with different prompt templates and models")
 

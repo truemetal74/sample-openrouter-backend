@@ -63,23 +63,23 @@ python scripts\test_api.py
 ### Manual Test
 ```bash
 # Health check
-curl http://localhost:8000/health
+curl http://localhost:8080/health
 
 # Generate token
-curl -X POST "http://localhost:8000/auth/token?user_id=test_user"
+curl -X POST "http://localhost:8080/auth/token?user_id=test_user"
 
 # Use token (replace YOUR_TOKEN)
 curl -H "Authorization: Bearer YOUR_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"prompt_text": "Hello!"}' \
-     http://localhost:8000/ask-llm
+     http://localhost:8080/ask-llm
 ```
 
 ## 🌐 Access Points
 
-- **Service**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+- **Service**: http://localhost:8080
+- **API Docs**: http://localhost:8080/docs
+- **Health Check**: http://localhost:8080/health
 
 ## 🐳 Docker Alternative
 
@@ -99,7 +99,7 @@ docker-compose up --build
 - Check the logs for error details
 - Verify your `.env` file is configured
 - Ensure the virtual environment is activated
-- Check that port 8000 is available
+- Check that port 8080 is available
 
 ---
 
