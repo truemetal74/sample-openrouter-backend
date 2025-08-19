@@ -1,11 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Request, status
+from fastapi import FastAPI, Depends, HTTPException, Request, status, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models import LLMRequest, LLMResponse, AccessToken
 from app.services import LLMService
-from app.auth import AuthManager, get_current_user, get_current_user_dependency
+from app.auth import get_auth_manager, authenticate_user_oauth2, get_current_user_dependency
 from app.logging_middleware import extract_request_id, get_client_ip, get_loggable_headers, logging_middleware
 from app.prompts import PromptManager
 
@@ -253,30 +253,35 @@ async def ask_llm(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post("/auth/token", response_model=AccessToken, tags=["authentication"])
-async def create_access_token(user_id: str):
+@app.post("/auth/token", tags=["authentication"])
+async def login_for_access_token(
+    username: str = Form(...),
+    password: str = Form(...)
+):
     """
-    Create a new access token for a user.
-    Note: In production, this should be protected and only allow valid user creation.
+    OAuth2.0 compatible login endpoint.
+    
+    Accepts username and password via form data and returns an access token.
+    Uses the configured authentication manager from settings.
     """
     try:
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Creating access token for user: {user_id}")
+            logger.debug(f"Login attempt for user: {username}")
         
-        token = AuthManager.create_access_token(user_id)
-        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        # Use the OAuth2.0 compatible authentication
+        result = await authenticate_user_oauth2(username, password)
         
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Token created successfully for user {user_id}, expires in {expires_in} seconds")
+            logger.debug(f"Login successful for user {username}")
         
-        return AccessToken(
-            access_token=token,
-            token_type="bearer",
-            expires_in=expires_in
-        )
+        return result
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 401 for auth failure)
+        raise
     except Exception as e:
-        logger.error(f"Error creating token for user {user_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to create access token")
+        logger.error(f"Unexpected error during login for user {username}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error during authentication")
 
 
 @app.get("/prompts", tags=["prompts"])
@@ -471,5 +476,9 @@ async def root():
             "models": "/models",
             "health": "/health"
         },
-        "custom_routes": custom_routes_info
+        "custom_routes": custom_routes_info,
+        "authentication": {
+            "manager": getattr(settings, 'AUTH_MANAGER_CLASS', 'DefaultAuthManager'),
+            "endpoint": "/auth/token"
+        }
     }

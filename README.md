@@ -336,6 +336,45 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
      "http://localhost:8080/prompts/custom_analysis/info"
 ```
 
+## 🔐 Authentication
+
+The application supports configurable authentication managers through the `AUTH_MANAGER_CLASS` setting.
+
+### Available Authentication Managers
+
+- **DefaultAuthManager** (default): No authentication, no token issuance
+- **JWTTokenManager**: JWT-based token creation and validation
+- **Custom**: Implement your own by extending `BaseAuthManager`
+
+### Configuration
+
+Set in your `.env` file:
+
+```bash
+# Use JWT token manager
+AUTH_MANAGER_CLASS=JWTTokenManager
+
+# Use custom authentication manager
+AUTH_MANAGER_CLASS=app.custom_auth_example.CustomAuthManager
+
+# Use database-based authentication
+AUTH_MANAGER_CLASS=app.custom_auth_example.DatabaseAuthManager
+```
+
+### OAuth2.0 Compatible Login
+
+The `/auth/token` endpoint accepts username and password via form data and returns an access token:
+
+```bash
+curl -X POST "http://localhost:8000/auth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin&password=admin123"
+```
+
+### Custom Authentication Managers
+
+See `app/custom_auth_example.py` for examples of how to implement custom authentication logic.
+
 ## 🔌 Custom Routes
 
 The application supports dynamically loading custom route modules at startup. This allows you to extend the API with additional endpoints without modifying the core application code.

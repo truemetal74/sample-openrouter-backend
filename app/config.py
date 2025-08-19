@@ -56,7 +56,13 @@ class Settings(BaseSettings):
     # Custom Routes Configuration
     CUSTOM_ROUTES: List[str] = Field(
         default=[], 
-        description="List of additional route modules to load dynamically (comma-separated or list)"
+        description="List of additional route modules to load dynamically"
+    )
+    
+    # Authentication Manager Configuration
+    AUTH_MANAGER_CLASS: str = Field(
+        default="DefaultAuthManager",
+        description="Authentication manager class to use. Options: DefaultAuthManager, JWTTokenManager, or custom.module.ClassName"
     )
     
     class Config:
