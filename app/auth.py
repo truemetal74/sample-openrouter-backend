@@ -1,11 +1,16 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import settings
 from app.exceptions import AuthenticationError
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Security
+security = HTTPBearer()
 
 
 class AuthManager:
@@ -118,3 +123,15 @@ def get_current_user(token: str) -> str:
         token = token[7:]
     
     return AuthManager.get_user_id_from_token(token)
+
+
+async def get_current_user_dependency(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Dependency to get current authenticated user."""
+    try:
+        return get_current_user(credentials.credentials)
+    except AuthenticationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=e.message,
+            headers={"WWW-Authenticate": "Bearer"}
+        )

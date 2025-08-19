@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models import LLMRequest, LLMResponse, AccessToken
 from app.services import LLMService
-from app.auth import AuthManager, get_current_user
-from app.logging_middleware import extract_request_id
+from app.auth import AuthManager, get_current_user, get_current_user_dependency
+from app.logging_middleware import extract_request_id, get_client_ip, get_loggable_headers, logging_middleware
 from app.prompts import PromptManager
 
 from app.exceptions import (
@@ -142,8 +142,6 @@ def load_custom_routes():
         # Don't fail the entire application startup if custom routes fail
 
 
-
-
 # Load custom routes
 try:
     load_custom_routes()
@@ -151,159 +149,60 @@ except Exception as e:
     logger.error(f"Critical error during custom routes loading: {str(e)}")
     logger.warning("Application will continue without custom routes")
 
-# Log startup completion
-logger.info("Application startup completed successfully")
-logger.info("Available endpoints:")
-logger.info("  - POST /ask-llm (LLM interactions)")
-logger.info("  - POST /auth/token (Authentication)")
-logger.info("  - GET /prompts (Prompt management)")
-logger.info("  - GET /models (Available models)")
-logger.info("  - GET /health (Health check)")
-logger.info("  - GET / (Service information)")
-logger.info("  - GET /docs (API documentation)")
 
 @app.middleware("http")
-async def logging_middleware(request: Request, call_next):
-    """Comprehensive logging middleware for all requests and responses."""
-    from app.logging_middleware import extract_request_id
-    
-    # Extract or generate request ID
-    request_id = extract_request_id(request)
-    request.state.request_id = request_id
-    
-    # Log request details
-    logger.info(f"[REQUEST] {request.method} {request.url.path} | "
-               f"Request ID: {request_id} | "
-               f"Client IP: {get_client_ip(request)} | "
-               f"Headers: {get_loggable_headers(request)}")
-    
-    # Log request body if detailed logging is enabled
-    if settings.ENABLE_DETAILED_LOGGING:
-        try:
-            req_body = await request.body()
-            if req_body:
-                content_type = request.headers.get('content-type', '').lower()
-                if 'multipart/form-data' in content_type or 'application/octet-stream' in content_type:
-                    req_body_text = "<binary data>"
-                else:
-                    req_body_text = req_body.decode("utf-8").replace("\n", " ")
-                logger.info(f"[REQUEST BODY] {request_id} | {req_body_text}")
-            else:
-                logger.info(f"[REQUEST BODY] {request_id} | <empty>")
-        except Exception as e:
-            logger.warning(f"[REQUEST BODY] {request_id} | Error reading body: {e}")
-    
-    # Process the request
-    try:
-        response = await call_next(request)
-        
-        # Log response details
-        if settings.ENABLE_DETAILED_LOGGING:
-            try:
-                if hasattr(response, 'body'):
-                    response_text = response.body.decode("utf-8").replace("\n", " ")
-                    if len(response_text) > 500:
-                        response_text = response_text[:500] + "... [truncated]"
-                    logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | {response_text}")
-                else:
-                    logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | <no body>")
-            except Exception as e:
-                logger.warning(f"[RESPONSE] {request_id} | Status: {response.status_code} | Error logging response: {e}")
-        else:
-            logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code}")
-        
-        # Add request ID to response headers
-        response.headers["X-Request-ID"] = request_id
-        
-        return response
-        
-    except Exception as e:
-        logger.error(f"[ERROR] {request_id} | Exception: {str(e)}")
-        raise
+async def logging_middleware_wrapper(request: Request, call_next):
+    """Wrapper for the logging middleware from logging_middleware module."""
+    return await logging_middleware(request, call_next)
 
-def get_client_ip(request: Request) -> str:
-    """Extract client IP from various headers."""
-    client_ip = request.headers.get("x-forwarded-for")
-    if client_ip:
-        return client_ip.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-def get_loggable_headers(request: Request) -> str:
-    """Extract and format loggable headers."""
-    headers_to_log = ['content-type', 'user-agent', 'accept', 'x-forwarded-for', 'host', 'referer']
-    sensitive_headers = ['authorization', 'recaptcha-response']
-    
-    def obfuscate_string(s: str) -> str:
-        if s is None or len(s) <= 13:
-            return s
-        return s[:10] + '***' + s[-3:]
-    
-    headers = []
-    for header in headers_to_log:
-        value = request.headers.get(header)
-        if value:
-            if header in sensitive_headers:
-                value = obfuscate_string(value)
-            headers.append(f"{header}: '{value}'")
-    
-    return " | ".join(headers) if headers else "No relevant headers"
-
-# Security
-security = HTTPBearer()
-
-
-
-
-
-
-
-
-
-
-@app.exception_handler(BaseAppException)
-async def app_exception_handler(request: Request, exc: BaseAppException):
-    """Handle custom application exceptions."""
-    request_id = extract_request_id(request)
-    logger.error(f"Application exception: {exc.message}", extra={
-        "request_id": request_id,
-        "status_code": exc.status_code,
-        "details": exc.details
-    })
-    
-    return {
-        "error": exc.message,
-        "status_code": exc.status_code,
-        "request_id": request_id,
-        "details": exc.details
-    }
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    """Handle unexpected exceptions."""
+async def unified_exception_handler(request: Request, exc: Exception):
+    """Unified exception handler for all types of exceptions."""
     request_id = extract_request_id(request)
-    logger.error(f"Unexpected exception: {str(exc)}", extra={
-        "request_id": request_id,
-        "exception_type": type(exc).__name__
-    })
     
-    return {
-        "error": "Internal server error",
-        "status_code": 500,
-        "request_id": request_id
-    }
-
-
-async def get_current_user_dependency(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Dependency to get current authenticated user."""
-    try:
-        return get_current_user(credentials.credentials)
-    except AuthenticationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=e.message,
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+    # Handle custom application exceptions
+    if isinstance(exc, BaseAppException):
+        logger.error(f"Application exception: {exc.message}", extra={
+            "request_id": request_id,
+            "status_code": exc.status_code,
+            "details": exc.details
+        })
+        
+        return {
+            "error": exc.message,
+            "status_code": exc.status_code,
+            "request_id": request_id,
+            "details": exc.details
+        }
+    
+    # Handle validation errors (FastAPI's built-in validation)
+    elif hasattr(exc, 'status_code') and exc.status_code == 422:
+        logger.warning(f"Validation error: {str(exc)}", extra={
+            "request_id": request_id,
+            "exception_type": type(exc).__name__
+        })
+        
+        return {
+            "error": "Validation error",
+            "status_code": 422,
+            "request_id": request_id,
+            "details": str(exc)
+        }
+    
+    # Handle all other unexpected exceptions
+    else:
+        logger.error(f"Unexpected exception: {str(exc)}", extra={
+            "request_id": request_id,
+            "exception_type": type(exc).__name__
+        })
+        
+        return {
+            "error": "Internal server error",
+            "status_code": 500,
+            "request_id": request_id
+        }
 
 
 @app.post("/ask-llm", response_model=LLMResponse, tags=["llm"])

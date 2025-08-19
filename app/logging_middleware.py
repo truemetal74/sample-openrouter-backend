@@ -22,6 +22,89 @@ def extract_request_id(request: Request):
             return id
     return 'WT-'+str(uuid.uuid4())
 
+def get_client_ip(request: Request) -> str:
+    """Extract client IP from various headers."""
+    client_ip = request.headers.get("x-forwarded-for")
+    if client_ip:
+        return client_ip.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def get_loggable_headers(request: Request) -> str:
+    """Extract and format loggable headers."""
+    headers_to_log = ['content-type', 'user-agent', 'accept', 'x-forwarded-for', 'host', 'referer']
+    sensitive_headers = ['authorization', 'recaptcha-response']
+    
+    def obfuscate_string(s: str) -> str:
+        if s is None or len(s) <= 13:
+            return s
+        return s[:10] + '***' + s[-3:]
+    
+    headers = []
+    for header in headers_to_log:
+        value = request.headers.get(header)
+        if value:
+            if header in sensitive_headers:
+                value = obfuscate_string(value)
+            headers.append(f"{header}: '{value}'")
+    
+    return " | ".join(headers) if headers else "No relevant headers"
+
+async def logging_middleware(request: Request, call_next):
+    """Comprehensive logging middleware for all requests and responses."""
+    # Extract or generate request ID
+    request_id = extract_request_id(request)
+    request.state.request_id = request_id
+    
+    # Log request details
+    logger.info(f"[REQUEST] {request.method} {request.url.path} | "
+               f"Request ID: {request_id} | "
+               f"Client IP: {get_client_ip(request)} | "
+               f"Headers: {get_loggable_headers(request)}")
+    
+    # Log request body if detailed logging is enabled
+    if settings.ENABLE_DETAILED_LOGGING:
+        try:
+            req_body = await request.body()
+            if req_body:
+                content_type = request.headers.get('content-type', '').lower()
+                if 'multipart/form-data' in content_type or 'application/octet-stream' in content_type:
+                    req_body_text = "<binary data>"
+                else:
+                    req_body_text = req_body.decode("utf-8").replace("\n", " ")
+                logger.info(f"[REQUEST BODY] {request_id} | {req_body_text}")
+            else:
+                logger.info(f"[REQUEST BODY] {request_id} | <empty>")
+        except Exception as e:
+            logger.warning(f"[REQUEST BODY] {request_id} | Error reading body: {e}")
+    
+    # Process the request
+    try:
+        response = await call_next(request)
+        
+        # Log response details
+        if settings.ENABLE_DETAILED_LOGGING:
+            try:
+                if hasattr(response, 'body'):
+                    response_text = response.body.decode("utf-8").replace("\n", " ")
+                    if len(response_text) > 500:
+                        response_text = response_text[:500] + "... [truncated]"
+                    logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | {response_text}")
+                else:
+                    logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | <no body>")
+            except Exception as e:
+                logger.warning(f"[RESPONSE] {request_id} | Status: {response.status_code} | Error logging response: {e}")
+        else:
+            logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code}")
+        
+        # Add request ID to response headers
+        response.headers["X-Request-ID"] = request_id
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"[ERROR] {request_id} | Exception: {str(e)}")
+        raise
+
 def log_formatted_json(label: str, text):
     """Take JSON (as byte-string) and pretty-print it to the log"""
     if len(text) == 0:
