@@ -31,13 +31,14 @@ class BaseAuthManager:
         logger.warning("Base authentication manager - no actual authentication performed")
         return None
     
-    def create_access_token(self, user_id: str, expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(self, user_id: str, expires_delta: Optional[timedelta] = None, additional_claims: Optional[Dict[str, Any]] = None) -> str:
         """
         Create a new access token for a user.
         
         Args:
             user_id: User identifier
             expires_delta: Optional custom expiration time
+            additional_claims: Optional dictionary of additional claims to include in the token
             
         Returns:
             JWT token string
@@ -62,13 +63,16 @@ class JWTTokenManager(BaseAuthManager):
     
     ALGORITHM = "HS256"
     
-    def create_access_token(self, user_id: str, expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(self, user_id: str,
+            expires_delta: Optional[timedelta] = None,
+            additional_claims: Optional[Dict[str, Any]] = None) -> str:
         """
         Create a new JWT access token.
         
         Args:
             user_id: User identifier
             expires_delta: Optional custom expiration time
+            additional_claims: Optional dictionary of additional claims to include in the token
             
         Returns:
             JWT token string
@@ -83,9 +87,21 @@ class JWTTokenManager(BaseAuthManager):
             "exp": expire
         }
         
+        # Add additional claims if provided
+        if additional_claims:
+            # Ensure we don't override reserved claims
+            reserved_claims = {"user_id", "exp", "iat", "nbf", "iss", "aud", "sub", "jti"}
+            for key, value in additional_claims.items():
+                if key not in reserved_claims:
+                    to_encode[key] = value
+                else:
+                    logger.warning(f"Skipping reserved claim '{key}' in additional_claims")
+        
         try:
             encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=self.ALGORITHM)
             logger.info(f"Created access token for user {user_id}, expires at {expire}")
+            if additional_claims:
+                logger.debug(f"Token includes additional claims: {list(additional_claims.keys())}")
             return encoded_jwt
         except Exception as e:
             logger.error(f"Error creating access token: {str(e)}")
@@ -141,6 +157,29 @@ class JWTTokenManager(BaseAuthManager):
         """
         payload = self.verify_token(token)
         return payload["user_id"]
+    
+    def get_additional_claims_from_token(self, token: str) -> Dict[str, Any]:
+        """
+        Extract additional claims from a JWT token, excluding standard JWT claims.
+        
+        Args:
+            token: JWT token string
+            
+        Returns:
+            Dictionary of additional claims
+            
+        Raises:
+            AuthenticationError: If token is invalid
+        """
+        payload = self.verify_token(token)
+        
+        # Standard JWT claims that we don't want to return
+        standard_claims = {"user_id", "exp", "iat", "nbf", "iss", "aud", "sub", "jti"}
+        
+        # Return only non-standard claims
+        additional_claims = {k: v for k, v in payload.items() if k not in standard_claims}
+        
+        return additional_claims
 
 
 # Factory function to get the configured authentication manager
@@ -240,7 +279,15 @@ async def authenticate_user_oauth2(username: str = Form(...), password: str = Fo
     # Create access token
     try:
         user_id = user_data.get('id') or user_data.get('user_id') or username
-        access_token = auth_manager.create_access_token(user_id)
+        
+        # Extract additional claims from user data (excluding sensitive fields)
+        additional_claims = {}
+        sensitive_fields = {'password', 'secret', 'token', 'api_key'}
+        for key, value in user_data.items():
+            if key.lower() not in sensitive_fields and key not in {'id', 'user_id', 'username'}:
+                additional_claims[key] = value
+        
+        access_token = auth_manager.create_access_token(user_id, additional_claims=additional_claims)
         expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
         
         logger.info(f"User {username} authenticated successfully")
