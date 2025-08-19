@@ -14,6 +14,7 @@ A production-ready FastAPI application that provides a single API endpoint for L
 - **Production Ready**: Comprehensive error handling, logging, and monitoring
 - **Comprehensive Logging**: All inbound requests and returned data logged independently of endpoint implementation
 - **Request ID Tracking**: Automatic request ID extraction from headers or generation for distributed tracing
+- **Custom Routes**: Dynamically load additional route modules via configuration
 - **Docker Support**: Containerized deployment
 - **GCP Ready**: Deployment scripts for Google Cloud Platform
 
@@ -335,6 +336,36 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
      "http://localhost:8080/prompts/custom_analysis/info"
 ```
 
+## 🔌 Custom Routes
+
+The application supports dynamically loading custom route modules at startup. This allows you to extend the API with additional endpoints without modifying the core application code.
+
+### Configuration
+
+Add custom routes to your `.env` file:
+
+```bash
+# Single module
+CUSTOM_ROUTES=custom_routes_example
+
+# Multiple modules (comma-separated)
+CUSTOM_ROUTES=custom_routes_example,another_module,third_module
+```
+
+### Example Custom Module
+
+See `app/custom_routes_example.py` for a complete working example. Custom modules should:
+
+1. Define a `router` attribute (FastAPI APIRouter instance)
+2. Optionally implement an `initialize(config)` method for setup
+3. Be importable by Python
+
+### Usage
+
+Once configured, custom routes are automatically loaded and available at their defined paths (e.g., `/custom/hello` for the example module).
+
+For detailed documentation, see `CUSTOM_ROUTES_README.md`.
+
 ## 📁 Project Structure
 
 ```
@@ -344,6 +375,7 @@ sample-openrouter-backend/
 │   ├── api.py             # FastAPI application and endpoints
 │   ├── auth.py            # Authentication and JWT handling
 │   ├── config.py          # Configuration management
+│   ├── custom_routes_example.py # Example custom route module
 │   ├── exceptions.py      # Custom exception classes
 │   ├── logging_middleware.py # Helper functions for logging
 │   ├── main.py            # Application entry point

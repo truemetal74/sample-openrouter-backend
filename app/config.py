@@ -53,6 +53,12 @@ class Settings(BaseSettings):
         description="List of allowed headers for CORS (use ['*'] for all headers)"
     )
     
+    # Custom Routes Configuration
+    CUSTOM_ROUTES: List[str] = Field(
+        default=[], 
+        description="List of additional route modules to load dynamically (comma-separated or list)"
+    )
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
@@ -60,3 +66,45 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
+
+
+def get_safe_config_for_logging():
+    """
+    Get a sanitized version of configuration for logging purposes.
+    
+    Returns:
+        dict: Configuration with sensitive values masked
+    """
+    # Define sensitive fields that should be masked
+    sensitive_fields = {
+        'OPENROUTER_API_KEY', 'SECRET_KEY', 'API_KEY', 'PASSWORD', 
+        'TOKEN', 'SECRET', 'PRIVATE_KEY', 'CREDENTIALS'
+    }
+    
+    safe_config = {}
+    
+    # Get all config attributes
+    for attr_name in dir(settings):
+        # Skip private attributes and methods
+        if attr_name.startswith('_') or callable(getattr(settings, attr_name)):
+            continue
+            
+        attr_value = getattr(settings, attr_name)
+        
+        # Check if this field contains sensitive data
+        is_sensitive = any(sensitive_field in attr_name.upper() for sensitive_field in sensitive_fields)
+        
+        if is_sensitive and attr_value:
+            # Mask sensitive values
+            if isinstance(attr_value, str):
+                if len(attr_value) <= 8:
+                    safe_config[attr_name] = '***'
+                else:
+                    safe_config[attr_name] = attr_value[:4] + '***' + attr_value[-4:]
+            else:
+                safe_config[attr_name] = '***'
+        else:
+            # Keep non-sensitive values as-is
+            safe_config[attr_name] = attr_value
+    
+    return safe_config

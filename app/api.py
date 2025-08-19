@@ -57,27 +57,15 @@ async def lifespan(app: FastAPI):
             if hasattr(llm_service, 'openrouter_client') and llm_service.openrouter_client:
                 try:
                     await llm_service.openrouter_client.close()
+                    logger.info("OpenRouter client closed successfully")
                 except Exception as e:
                     logger.warning(f"Error closing OpenRouter client: {e}")
             logger.info("LLM Service cleanup completed")
     except Exception as e:
         logger.error(f"Error during LLM Service cleanup: {e}")
-    finally:
-        # Cancel any remaining tasks
-        import asyncio
-        try:
-            # Cancel all running tasks
-            tasks = [task for task in asyncio.all_tasks() if not task.done()]
-            if tasks:
-                logger.info(f"Cancelling {len(tasks)} remaining tasks")
-                for task in tasks:
-                    task.cancel()
-                # Wait for tasks to be cancelled
-                await asyncio.gather(*tasks, return_exceptions=True)
-        except Exception as e:
-            logger.warning(f"Error during task cleanup: {e}")
-        
-        logger.info("Sample OpenRouter Backend shutdown complete")
+    
+    # Graceful shutdown - don't aggressively cancel all tasks
+    logger.info("Sample OpenRouter Backend shutdown complete")
 
 # Create FastAPI app with lifespan management
 app = FastAPI(
@@ -95,6 +83,60 @@ app.add_middleware(
     allow_methods=settings.CORS_ALLOW_METHODS,
     allow_headers=settings.CORS_ALLOW_HEADERS,
 )
+
+# Load custom route modules dynamically
+def load_custom_routes():
+    """Dynamically load custom route modules specified in configuration."""
+    import importlib
+    
+    # Get routes from config - support both list and comma-separated string
+    custom_routes = settings.CUSTOM_ROUTES
+    if isinstance(custom_routes, str):
+        custom_routes = [route.strip() for route in custom_routes.split(",") if route.strip()]
+    
+    if not custom_routes:
+        logger.info("No custom routes configured")
+        return
+    
+    logger.info(f"Loading custom route modules: {custom_routes}")
+    
+    for route_name in custom_routes:
+        route_name = route_name.strip()
+        if not route_name:
+            continue
+            
+        try:
+            # Import the router module dynamically
+            router_module = importlib.import_module(route_name)
+            
+            # Initialize the module if it has an initialize method
+            if hasattr(router_module, "initialize"):
+                try:
+                    logger.info(f"Initializing custom route module: {route_name}")
+                    
+                    # Pass the actual config to the module
+                    router_module.initialize(settings)
+                    logger.info(f"Initialized custom route module: {route_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize module {route_name}: {str(e)}")
+            
+            # Include the router if it exists
+            if hasattr(router_module, 'router'):
+                app.include_router(router_module.router)
+                logger.info(f"Successfully loaded router from {route_name}")
+            else:
+                logger.warning(f"Router module {route_name} does not contain a 'router' attribute")
+                
+        except ImportError as e:
+            logger.error(f"Failed to import router module {route_name}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error loading router from {route_name}: {str(e)}")
+
+
+
+
+# Load custom routes
+load_custom_routes()
 
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
@@ -476,6 +518,20 @@ async def health_check():
 @app.get("/", tags=["system"])
 async def root():
     """Root endpoint with service information."""
+    # Get custom routes info
+    custom_routes_info = {}
+    if hasattr(settings, 'CUSTOM_ROUTES') and settings.CUSTOM_ROUTES:
+        custom_routes = settings.CUSTOM_ROUTES
+        if isinstance(custom_routes, str):
+            custom_routes = [route.strip() for route in custom_routes.split(",") if route.strip()]
+        custom_routes_info = {
+            "enabled": True,
+            "modules": custom_routes,
+            "base_path": "/custom"  # This will vary based on your custom modules
+        }
+    else:
+        custom_routes_info = {"enabled": False}
+    
     return {
         "service": "Sample OpenRouter Backend",
         "version": "1.0.0",
@@ -491,5 +547,6 @@ async def root():
             },
             "models": "/models",
             "health": "/health"
-        }
+        },
+        "custom_routes": custom_routes_info
     }
