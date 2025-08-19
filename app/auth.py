@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from app.config import settings
@@ -28,7 +28,7 @@ class AuthManager:
         if expires_delta is None:
             expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
         
         to_encode = {
             "user_id": user_id,
@@ -66,7 +66,7 @@ class AuthManager:
             
             # Check if token is expired
             exp = payload.get("exp")
-            if exp is None or datetime.utcnow() > datetime.fromtimestamp(exp):
+            if exp is None or datetime.now(timezone.utc) > datetime.fromtimestamp(exp):
                 raise AuthenticationError("Token has expired")
             
             logger.info(f"Successfully verified token for user {user_id}")
