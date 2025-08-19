@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
     ENABLE_DETAILED_LOGGING: bool = Field(default=True, description="Enable detailed request/response logging")
+    LOG_TEXT_TRUNCATE_LENGTH: int = Field(default=500, description="Maximum length of text to log before truncating with '...'")
     
     # Trusted IPs for rate limiting whitelist
     TRUSTED_IPS: List[str] = Field(default=[], description="List of trusted IP addresses to bypass rate limiting")

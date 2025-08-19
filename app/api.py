@@ -238,7 +238,7 @@ async def ask_llm(
                         f"model_used={response.model_used}, "
                         f"tokens_used={response.tokens_used}")
             if response.response:
-                logger.debug(f"LLM Response text: {response.response[:500]}{'...' if len(response.response) > 500 else ''}")
+                logger.debug(f"LLM Response text: {response.response[:settings.LOG_TEXT_TRUNCATE_LENGTH]}{'...' if len(response.response) > settings.LOG_TEXT_TRUNCATE_LENGTH else ''}")
         
         return response
         

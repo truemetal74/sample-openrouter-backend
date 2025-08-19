@@ -86,8 +86,8 @@ async def logging_middleware(request: Request, call_next):
             try:
                 if hasattr(response, 'body'):
                     response_text = response.body.decode("utf-8").replace("\n", " ")
-                    if len(response_text) > 500:
-                        response_text = response_text[:500] + "... [truncated]"
+                    if len(response_text) > settings.LOG_TEXT_TRUNCATE_LENGTH:
+                        response_text = response_text[:settings.LOG_TEXT_TRUNCATE_LENGTH] + "... [truncated]"
                     logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | {response_text}")
                 else:
                     logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | <no body>")
@@ -253,8 +253,8 @@ class RouteWithLogging(APIRoute):
                         if res_body:
                             response_text = res_body.decode("utf-8").replace("\n", " ")
                             # Truncate long responses for readability
-                            if len(response_text) > 500:
-                                response_text = response_text[:500] + "... [truncated]"
+                            if len(response_text) > settings.LOG_TEXT_TRUNCATE_LENGTH:
+                                response_text = response_text[:settings.LOG_TEXT_TRUNCATE_LENGTH] + "... [truncated]"
                             logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | {response_text}")
                         else:
                             logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | Empty response")
