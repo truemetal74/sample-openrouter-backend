@@ -89,54 +89,78 @@ def load_custom_routes():
     """Dynamically load custom route modules specified in configuration."""
     import importlib
     
-    # Get routes from config - support both list and comma-separated string
-    custom_routes = settings.CUSTOM_ROUTES
-    if isinstance(custom_routes, str):
-        custom_routes = [route.strip() for route in custom_routes.split(",") if route.strip()]
-    
-    if not custom_routes:
-        logger.info("No custom routes configured")
-        return
-    
-    logger.info(f"Loading custom route modules: {custom_routes}")
-    
-    for route_name in custom_routes:
-        route_name = route_name.strip()
-        if not route_name:
-            continue
-            
-        try:
-            # Import the router module dynamically
-            router_module = importlib.import_module(route_name)
-            
-            # Initialize the module if it has an initialize method
-            if hasattr(router_module, "initialize"):
-                try:
-                    logger.info(f"Initializing custom route module: {route_name}")
-                    
-                    # Pass the actual config to the module
-                    router_module.initialize(settings)
-                    logger.info(f"Initialized custom route module: {route_name}")
-                except Exception as e:
-                    logger.warning(f"Failed to initialize module {route_name}: {str(e)}")
-            
-            # Include the router if it exists
-            if hasattr(router_module, 'router'):
-                app.include_router(router_module.router)
-                logger.info(f"Successfully loaded router from {route_name}")
-            else:
-                logger.warning(f"Router module {route_name} does not contain a 'router' attribute")
+    try:
+        # Get routes from config - support both list and comma-separated string
+        custom_routes = settings.CUSTOM_ROUTES
+        if isinstance(custom_routes, str):
+            custom_routes = [route.strip() for route in custom_routes.split(",") if route.strip()]
+        
+        if not custom_routes:
+            logger.info("No custom routes configured")
+            return
+        
+        logger.info(f"Loading custom route modules: {custom_routes}")
+        
+        loaded_modules = 0
+        for route_name in custom_routes:
+            route_name = route_name.strip()
+            if not route_name:
+                continue
                 
-        except ImportError as e:
-            logger.error(f"Failed to import router module {route_name}: {str(e)}")
-        except Exception as e:
-            logger.error(f"Error loading router from {route_name}: {str(e)}")
+            try:
+                # Import the router module dynamically
+                router_module = importlib.import_module(route_name)
+                
+                # Initialize the module if it has an initialize method
+                if hasattr(router_module, "initialize"):
+                    try:
+                        logger.info(f"Initializing custom route module: {route_name}")
+                        
+                        # Pass the actual config to the module
+                        router_module.initialize(settings)
+                        logger.info(f"Initialized custom route module: {route_name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize module {route_name}: {str(e)}")
+                
+                # Include the router if it exists
+                if hasattr(router_module, 'router'):
+                    app.include_router(router_module.router)
+                    logger.info(f"Successfully loaded router from {route_name}")
+                    loaded_modules += 1
+                else:
+                    logger.warning(f"Router module {route_name} does not contain a 'router' attribute")
+                    
+            except ImportError as e:
+                logger.error(f"Failed to import router module {route_name}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error loading router from {route_name}: {str(e)}")
+        
+        logger.info(f"Custom routes loading completed. Successfully loaded {loaded_modules}/{len(custom_routes)} modules.")
+                
+    except Exception as e:
+        logger.error(f"Unexpected error during custom routes loading: {str(e)}")
+        # Don't fail the entire application startup if custom routes fail
 
 
 
 
 # Load custom routes
-load_custom_routes()
+try:
+    load_custom_routes()
+except Exception as e:
+    logger.error(f"Critical error during custom routes loading: {str(e)}")
+    logger.warning("Application will continue without custom routes")
+
+# Log startup completion
+logger.info("Application startup completed successfully")
+logger.info("Available endpoints:")
+logger.info("  - POST /ask-llm (LLM interactions)")
+logger.info("  - POST /auth/token (Authentication)")
+logger.info("  - GET /prompts (Prompt management)")
+logger.info("  - GET /models (Available models)")
+logger.info("  - GET /health (Health check)")
+logger.info("  - GET / (Service information)")
+logger.info("  - GET /docs (API documentation)")
 
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):

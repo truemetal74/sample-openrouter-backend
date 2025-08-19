@@ -35,23 +35,31 @@ def initialize(config):
     Args:
         config: The application settings object
     """
-    logger.info(f"Initializing custom routes module: {__name__}")
-    # Add any initialization logic here
-    # For example: database connections, external service setup, etc.
-    
-    # Example: Check if required config is available (without logging sensitive data)
-    if hasattr(config, 'OPENROUTER_API_KEY') and config.OPENROUTER_API_KEY:
-        logger.info("OpenRouter API key is configured")
-    else:
-        logger.warning("OpenRouter API key is not configured")
-    
-    if hasattr(config, 'CUSTOM_ROUTES'):
-        logger.info(f"Custom routes enabled: {config.CUSTOM_ROUTES}")
-    
-    # Example: Safe configuration logging (if needed)
-    # from app.config import get_safe_config_for_logging
-    # safe_config = get_safe_config_for_logging()
-    # logger.info(f"Module configuration: {safe_config}")
+    try:
+        logger.info(f"Initializing custom routes module: {__name__}")
+        
+        # Add any initialization logic here
+        # For example: database connections, external service setup, etc.
+        
+        # Example: Check if required config is available (without logging sensitive data)
+        if hasattr(config, 'OPENROUTER_API_KEY') and config.OPENROUTER_API_KEY:
+            logger.info("OpenRouter API key is configured")
+        else:
+            logger.warning("OpenRouter API key is not configured")
+        
+        if hasattr(config, 'CUSTOM_ROUTES'):
+            logger.info(f"Custom routes enabled: {config.CUSTOM_ROUTES}")
+        
+        # Example: Safe configuration logging (if needed)
+        # from app.config import get_safe_config_for_logging
+        # safe_config = get_safe_config_for_logging()
+        # logger.info(f"Module configuration: {safe_config}")
+        
+        logger.info(f"Custom routes module '{__name__}' initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize custom routes module '{__name__}': {str(e)}")
+        # Don't re-raise - let the application continue
 
 
 @router.get("/hello")
