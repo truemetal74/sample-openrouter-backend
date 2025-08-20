@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse, Response
 from app.config import settings
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +102,28 @@ async def logging_middleware(request: Request, call_next):
         
         return response
         
+    except HTTPException as http_exc:
+        # Log HTTP exceptions with full details
+        error_detail = getattr(http_exc, 'detail', 'No detail provided')
+        logger.error(f"[HTTP ERROR] {request_id} | Status: {http_exc.status_code} | Detail: {error_detail}")
+        
+        # If the detail is a dict/JSON, log it in a more readable format
+        if isinstance(error_detail, dict):
+            import json
+            try:
+                error_json = json.dumps(error_detail, indent=2)
+                logger.error(f"[HTTP ERROR DETAIL] {request_id} | {error_json}")
+            except Exception as json_e:
+                logger.error(f"[HTTP ERROR DETAIL] {request_id} | Failed to format JSON: {json_e} | Raw: {error_detail}")
+        elif isinstance(error_detail, str):
+            logger.error(f"[HTTP ERROR DETAIL] {request_id} | {error_detail}")
+        
+        raise
     except Exception as e:
         logger.error(f"[ERROR] {request_id} | Exception: {str(e)}")
+        # Log the full traceback for unexpected errors
+        import traceback
+        logger.error(f"[ERROR TRACEBACK] {request_id} | {traceback.format_exc()}")
         raise
 
 def log_formatted_json(label: str, text):
@@ -204,6 +225,24 @@ class RouteWithLogging(APIRoute):
             
             try:
                 response = await original_route_handler(request)
+            except HTTPException as http_exc:
+                # Handle HTTP exceptions with detailed logging
+                error_detail = getattr(http_exc, 'detail', 'No detail provided')
+                logger.error(f"[HTTP ERROR] {request_id} | Status: {http_exc.status_code} | Detail: {error_detail}")
+                
+                # If the detail is a dict/JSON, log it in a more readable format
+                if isinstance(error_detail, dict):
+                    import json
+                    try:
+                        error_json = json.dumps(error_detail, indent=2)
+                        logger.error(f"[HTTP ERROR DETAIL] {request_id} | {error_json}")
+                    except Exception as json_e:
+                        logger.error(f"[HTTP ERROR DETAIL] {request_id} | Failed to format JSON: {json_e} | Raw: {error_detail}")
+                elif isinstance(error_detail, str):
+                    logger.error(f"[HTTP ERROR DETAIL] {request_id} | {error_detail}")
+                
+                # Re-raise the HTTP exception
+                raise
             except RequestValidationError as validation_exc:
                 # Handle validation errors
                 err_response = JSONResponse(status_code=422,
@@ -215,10 +254,11 @@ class RouteWithLogging(APIRoute):
                                                         )
                 )
 
-                logger.error(f"Validation exception {validation_exc.errors()}")
+                logger.error(f"[VALIDATION ERROR] {request_id} | {validation_exc.errors()}")
                 return err_response
             except Exception as e:
-                logger.error(f"Application error: {e} {traceback.format_exc()}")
+                logger.error(f"[APPLICATION ERROR] {request_id} | {e}")
+                logger.error(f"[ERROR TRACEBACK] {request_id} | {traceback.format_exc()}")
                 return JSONResponse(
                                         status_code=500,
                                         content=dict(
