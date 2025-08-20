@@ -129,7 +129,14 @@ class JWTTokenManager(BaseAuthManager):
             
             # Check if token is expired
             exp = payload.get("exp")
-            if exp is None or datetime.now(timezone.utc) > datetime.fromtimestamp(exp):
+            if exp is None:
+                raise AuthenticationError("Token missing expiration")
+            
+            # Convert Unix timestamp to timezone-aware datetime for comparison
+            exp_datetime = datetime.fromtimestamp(exp, tz=timezone.utc)
+            current_time = datetime.now(timezone.utc)
+            
+            if current_time > exp_datetime:
                 raise AuthenticationError("Token has expired")
             
             logger.info(f"Successfully verified token for user {user_id}")
