@@ -82,18 +82,66 @@ async def logging_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         
+        # Debug: Log response type and attributes for troubleshooting
+        if settings.ENABLE_RESPONSE_DEBUG:
+            logger.debug(f"[RESPONSE DEBUG] {request_id} | Response type: {type(response)} | Status: {getattr(response, 'status_code', 'N/A')}")
+            if hasattr(response, 'body'):
+                logger.debug(f"[RESPONSE DEBUG] {request_id} | Has body: {bool(response.body)} | Body type: {type(response.body)} | Body length: {len(response.body) if response.body else 0}")
+            if hasattr(response, 'content'):
+                logger.debug(f"[RESPONSE DEBUG] {request_id} | Has content: {bool(response.content)} | Content type: {type(response.content)} | Content length: {len(response.content) if response.content else 0}")
+            # Log all available attributes for debugging
+            logger.debug(f"[RESPONSE DEBUG] {request_id} | Available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+        
         # Log response details
         if settings.ENABLE_DETAILED_LOGGING:
             try:
-                if hasattr(response, 'body'):
-                    response_text = response.body.decode("utf-8").replace("\n", " ")
+                # Try multiple ways to get response body
+                response_text = None
+                
+                # Method 1: Check if response has a body attribute
+                if hasattr(response, 'body') and response.body:
+                    try:
+                        if isinstance(response.body, bytes):
+                            response_text = response.body.decode("utf-8").replace("\n", " ")
+                        else:
+                            response_text = str(response.body)
+                    except (AttributeError, UnicodeDecodeError):
+                        response_text = str(response.body)
+                
+                # Method 2: Check if response has content attribute
+                elif hasattr(response, 'content') and response.content:
+                    try:
+                        if isinstance(response.content, bytes):
+                            response_text = response.content.decode("utf-8").replace("\n", " ")
+                        else:
+                            response_text = str(response.content)
+                    except (AttributeError, UnicodeDecodeError):
+                        response_text = str(response.content)
+                
+                # Method 3: Try to get response as string
+                elif hasattr(response, '__str__'):
+                    response_text = str(response)
+                
+                # Method 4: Try to access response data directly (for FastAPI responses)
+                elif hasattr(response, 'body_iterator') and response.body_iterator:
+                    try:
+                        # This is for streaming responses
+                        response_text = "<streaming response>"
+                    except Exception:
+                        pass
+                
+                # Log the response
+                if response_text and response_text.strip():
                     if len(response_text) > settings.LOG_TEXT_TRUNCATE_LENGTH:
                         response_text = response_text[:settings.LOG_TEXT_TRUNCATE_LENGTH] + "... [truncated]"
                     logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | {response_text}")
                 else:
                     logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | <no body>")
+                    
             except Exception as e:
                 logger.warning(f"[RESPONSE] {request_id} | Status: {response.status_code} | Error logging response: {e}")
+                # Fallback: log response type and attributes for debugging
+                logger.debug(f"[RESPONSE DEBUG] {request_id} | Response type: {type(response)} | Attributes: {dir(response)}")
         else:
             logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code}")
         
@@ -118,13 +166,32 @@ async def logging_middleware(request: Request, call_next):
         elif isinstance(error_detail, str):
             logger.error(f"[HTTP ERROR DETAIL] {request_id} | {error_detail}")
         
+        # Re-raise HTTP exceptions as they should be handled by FastAPI
         raise
     except Exception as e:
+        # Log the error with traceback for debugging
         logger.error(f"[ERROR] {request_id} | Exception: {str(e)}")
-        # Log the full traceback for unexpected errors
-        import traceback
         logger.error(f"[ERROR TRACEBACK] {request_id} | {traceback.format_exc()}")
-        raise
+        
+        # Return a proper error response instead of re-raising
+        # This prevents the error from propagating to uvicorn
+        error_content = {
+            "error": "Internal server error",
+            "message": "An unexpected error occurred",
+            "request_id": request_id
+        }
+        
+        # Add detailed error info only if configured (development only)
+        if settings.SHOW_DETAILED_ERRORS:
+            error_content.update({
+                "exception_type": type(e).__name__,
+                "exception_message": str(e)
+            })
+        
+        return JSONResponse(
+            status_code=500,
+            content=error_content
+        )
 
 def log_formatted_json(label: str, text):
     """Take JSON (as byte-string) and pretty-print it to the log"""
@@ -257,15 +324,27 @@ class RouteWithLogging(APIRoute):
                 logger.error(f"[VALIDATION ERROR] {request_id} | {validation_exc.errors()}")
                 return err_response
             except Exception as e:
+                # Log the error with traceback for debugging
                 logger.error(f"[APPLICATION ERROR] {request_id} | {e}")
                 logger.error(f"[ERROR TRACEBACK] {request_id} | {traceback.format_exc()}")
+                
+                # Return a clean error response without exposing internal details
+                error_content = {
+                    "error": "Internal server error",
+                    "message": "An unexpected error occurred",
+                    "request_id": request_id
+                }
+                
+                # Add detailed error info only if configured (development only)
+                if settings.SHOW_DETAILED_ERRORS:
+                    error_content.update({
+                        "exception_type": type(e).__name__,
+                        "exception_message": str(e)
+                    })
+                
                 return JSONResponse(
-                                        status_code=500,
-                                        content=dict(
-                                            message = f"Server error: {e}",
-                                            trace = traceback.format_exc(),
-                                            request_id = request_id
-                                        )
+                    status_code=500,
+                    content=error_content
                 )
             
             if isinstance(response, StreamingResponse):
