@@ -41,7 +41,7 @@ class OpenRouterClient:
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                             "HTTP-Referer": "https://sample-openrouter-backend.app",
-        "X-Title": "Sample OpenRouter Backend"
+        "X-Title": settings.APP_NAME
                 }
             )
     

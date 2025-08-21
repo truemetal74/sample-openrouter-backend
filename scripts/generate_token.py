@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from app.auth import AuthManager
+from app.auth import get_auth_manager
 from app.config import settings
 
 
@@ -33,8 +33,15 @@ def generate_token(user_id: str, expiration_days: int = None, expiration_hours: 
                 hours=expiration_hours or 0
             )
         
+        # Get the configured authentication manager
+        auth_manager = get_auth_manager()
+        
+        # Check if the auth manager supports token creation
+        if not hasattr(auth_manager, 'create_access_token'):
+            raise Exception("Current authentication manager doesn't support token creation")
+        
         # Generate token
-        token = AuthManager.create_access_token(user_id, expires_delta)
+        token = auth_manager.create_access_token(user_id, expires_delta)
         
         # Calculate actual expiration time
         if expires_delta:
@@ -49,6 +56,7 @@ def generate_token(user_id: str, expiration_days: int = None, expiration_hours: 
         print(f"Token: {token}")
         print(f"Expires: {expiry_str}")
         print(f"Token Type: Bearer")
+        print(f"Auth Manager: {type(auth_manager).__name__}")
         print("\nUsage:")
         print(f"Authorization: Bearer {token}")
         
@@ -60,7 +68,7 @@ def generate_token(user_id: str, expiration_days: int = None, expiration_hours: 
 def main():
     """Main function for command-line interface."""
     parser = argparse.ArgumentParser(
-        description="Generate access tokens for the Sample OpenRouter Backend",
+        description="Generate access tokens using the configured authentication manager",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
