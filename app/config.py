@@ -69,6 +69,22 @@ class Settings(BaseSettings):
         description="Authentication manager class to use. Options: DefaultAuthManager, JWTTokenManager, or custom.module.ClassName"
     )
     
+    # Application Metadata
+    APP_NAME: str = Field(
+        default="Sample OpenRouter Backend",
+        description="Application name displayed in API docs and responses"
+    )
+    
+    APP_DESCRIPTION: str = Field(
+        default="FastAPI application for LLM interactions via OpenRouter",
+        description="Application description displayed in API docs"
+    )
+    
+    APP_VERSION: str = Field(
+        default="1.0.0",
+        description="Application version number"
+    )
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

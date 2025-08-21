@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
     global llm_service
     
     # Startup
-    logger.info("Starting Sample OpenRouter Backend...")
+    logger.info(f"Starting {settings.APP_NAME}...")
     try:
         llm_service = LLMService()
         logger.info("LLM Service initialized successfully")
@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    logger.info("Shutting down Sample OpenRouter Backend...")
+    logger.info(f"Shutting down {settings.APP_NAME}...")
     try:
         if llm_service:
             # Clean up any resources if needed
@@ -65,13 +65,13 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error during LLM Service cleanup: {e}")
     
     # Graceful shutdown - don't aggressively cancel all tasks
-    logger.info("Sample OpenRouter Backend shutdown complete")
+    logger.info(f"{settings.APP_NAME} shutdown complete")
 
 # Create FastAPI app with lifespan management
 app = FastAPI(
-    title="Sample OpenRouter Backend",
-    description="FastAPI application for LLM interactions via OpenRouter",
-    version="1.0.0",
+    title=settings.APP_NAME,
+    description=settings.APP_DESCRIPTION,
+    version=settings.APP_VERSION,
     lifespan=lifespan
 )
 
@@ -440,7 +440,7 @@ async def get_prompt_info(
 @app.get("/health", tags=["system"])
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "Sample OpenRouter Backend"}
+    return {"status": "healthy", "service": settings.APP_NAME}
 
 
 @app.get("/", tags=["system"])
@@ -461,8 +461,8 @@ async def root():
         custom_routes_info = {"enabled": False}
     
     return {
-        "service": "Sample OpenRouter Backend",
-        "version": "1.0.0",
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
         "endpoints": {
             "ask_llm": "/ask-llm",
             "auth": "/auth/token",
