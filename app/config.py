@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     LOG_TEXT_TRUNCATE_LENGTH: int = Field(default=500, description="Maximum length of text to log before truncating with '...'")
     SHOW_DETAILED_ERRORS: bool = Field(default=False, description="Show detailed error information in responses (development only)")
     ENABLE_RESPONSE_DEBUG: bool = Field(default=False, description="Enable debug logging for response troubleshooting")
+    STREAMING_RESPONSE_LOG_LEVEL: str = Field(default="INFO", description="Log level for streaming responses: INFO (concise) or DEBUG (detailed)")
     
     # Trusted IPs for rate limiting whitelist
     TRUSTED_IPS: List[str] = Field(default=[], description="List of trusted IP addresses to bypass rate limiting")

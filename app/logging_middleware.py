@@ -84,11 +84,17 @@ async def logging_middleware(request: Request, call_next):
         
         # Debug: Log response type and attributes for troubleshooting
         if settings.ENABLE_RESPONSE_DEBUG:
-            logger.debug(f"[RESPONSE DEBUG] {request_id} | Response type: {type(response)} | Status: {getattr(response, 'status_code', 'N/A')}")
+            response_type = type(response).__name__
+            is_streaming = hasattr(response, 'body_iterator') or "StreamingResponse" in response_type
+            logger.debug(f"[RESPONSE DEBUG] {request_id} | Response type: {response_type} | Is streaming: {is_streaming} | Status: {getattr(response, 'status_code', 'N/A')}")
+            
             if hasattr(response, 'body'):
                 logger.debug(f"[RESPONSE DEBUG] {request_id} | Has body: {bool(response.body)} | Body type: {type(response.body)} | Body length: {len(response.body) if response.body else 0}")
             if hasattr(response, 'content'):
                 logger.debug(f"[RESPONSE DEBUG] {request_id} | Has content: {bool(response.content)} | Content type: {type(response.content)} | Content length: {len(response.content) if response.content else 0}")
+            if hasattr(response, 'body_iterator'):
+                logger.debug(f"[RESPONSE DEBUG] {request_id} | Has body_iterator: {bool(response.body_iterator)}")
+            
             # Log all available attributes for debugging
             logger.debug(f"[RESPONSE DEBUG] {request_id} | Available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}")
         
@@ -122,13 +128,17 @@ async def logging_middleware(request: Request, call_next):
                 elif hasattr(response, '__str__'):
                     response_text = str(response)
                 
-                # Method 4: Try to access response data directly (for FastAPI responses)
+                # Method 4: Check for streaming responses
                 elif hasattr(response, 'body_iterator') and response.body_iterator:
-                    try:
-                        # This is for streaming responses
-                        response_text = "<streaming response>"
-                    except Exception:
-                        pass
+                    response_text = "<streaming response>"
+                
+                # Method 5: Check for specific response types
+                elif "StreamingResponse" in str(type(response)) or "streaming" in str(type(response)).lower():
+                    response_text = "<streaming response>"
+                
+                # Method 6: Check for FastAPI's internal streaming responses
+                elif hasattr(response, '__class__') and "streaming" in response.__class__.__name__.lower():
+                    response_text = "<streaming response>"
                 
                 # Log the response
                 if response_text and response_text.strip():
@@ -347,22 +357,20 @@ class RouteWithLogging(APIRoute):
                     content=error_content
                 )
             
-            if isinstance(response, StreamingResponse):
-                res_body = b""
-                async for item in response.body_iterator:
-                    res_body += item
-
-                # Log streaming response
-                logger.info(f"[RESPONSE] {request_id} | Streaming response | Status: {response.status_code}")
+            # Check for streaming responses (including FastAPI's internal streaming responses)
+            if (isinstance(response, StreamingResponse) or 
+                hasattr(response, 'body_iterator') or 
+                "StreamingResponse" in str(type(response)) or
+                (hasattr(response, '__class__') and "streaming" in response.__class__.__name__.lower())):
                 
-                task = BackgroundTask(log_info, req_body, b"<streaming content>")
-                return Response(
-                    content=res_body,
-                    status_code=response.status_code,
-                    headers=dict(response.headers),
-                    media_type=response.media_type,
-                    background=task,
-                )
+                # For streaming responses, log based on configuration
+                if settings.STREAMING_RESPONSE_LOG_LEVEL.upper() == "DEBUG":
+                    logger.debug(f"[RESPONSE] {request_id} | Status: {response.status_code} | <streaming response> | Type: {type(response).__name__}")
+                else:
+                    logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | <streaming response>")
+                
+                # Don't try to consume the stream - just return the original response
+                return response
             else:
                 res_body = response.body
                 
