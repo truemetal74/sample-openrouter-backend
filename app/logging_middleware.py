@@ -97,6 +97,15 @@ async def logging_middleware(request: Request, call_next):
             
             # Log all available attributes for debugging
             logger.debug(f"[RESPONSE DEBUG] {request_id} | Available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+            
+            # Additional debugging for _StreamingResponse objects
+            if "_StreamingResponse" in response_type:
+                logger.debug(f"[RESPONSE DEBUG] {request_id} | _StreamingResponse detected | Status: {getattr(response, 'status_code', 'N/A')}")
+                logger.debug(f"[RESPONSE DEBUG] {request_id} | _StreamingResponse has body: {hasattr(response, 'body')} | has content: {hasattr(response, 'content')} | has body_iterator: {hasattr(response, 'body_iterator')}")
+                if hasattr(response, 'body') and response.body:
+                    logger.debug(f"[RESPONSE DEBUG] {request_id} | _StreamingResponse body type: {type(response.body)} | length: {len(response.body) if response.body else 0}")
+                if hasattr(response, 'content') and response.content:
+                    logger.debug(f"[RESPONSE DEBUG] {request_id} | _StreamingResponse content type: {type(response.content)} | length: {len(response.content) if response.content else 0}")
         
         # Log response details
         if settings.ENABLE_DETAILED_LOGGING:
@@ -128,17 +137,97 @@ async def logging_middleware(request: Request, call_next):
                 elif hasattr(response, '__str__'):
                     response_text = str(response)
                 
-                # Method 4: Check for streaming responses
-                elif hasattr(response, 'body_iterator') and response.body_iterator:
+                # Method 4: Check for actual streaming responses (more specific detection)
+                elif (isinstance(response, StreamingResponse) or 
+                      (hasattr(response, 'body_iterator') and response.body_iterator and 
+                       not hasattr(response, 'body') and not hasattr(response, 'content'))):
+                    # For responses with body_iterator, try to peek at the content if aggressive extraction is enabled
+                    if settings.AGGRESSIVE_CONTENT_EXTRACTION and hasattr(response, 'body_iterator') and response.body_iterator:
+                        try:
+                            # Try to get a preview of the streaming content
+                            if hasattr(response.body_iterator, '__aiter__'):
+                                # This is an async iterator, we can't easily peek without consuming it
+                                response_text = "<async streaming response>"
+                            else:
+                                # This might be a regular iterator, try to peek
+                                response_text = "<streaming response>"
+                        except Exception as e:
+                            if settings.ENABLE_RESPONSE_DEBUG:
+                                logger.debug(f"[RESPONSE DEBUG] {request_id} | Error peeking at streaming content: {e}")
+                            response_text = "<streaming response>"
+                    else:
+                        response_text = "<streaming response>"
+                
+                # Method 5: Check for specific response types (more specific)
+                elif (hasattr(response, '__class__') and 
+                      response.__class__.__name__ == "StreamingResponse"):
                     response_text = "<streaming response>"
                 
-                # Method 5: Check for specific response types
-                elif "StreamingResponse" in str(type(response)) or "streaming" in str(type(response)).lower():
-                    response_text = "<streaming response>"
-                
-                # Method 6: Check for FastAPI's internal streaming responses
-                elif hasattr(response, '__class__') and "streaming" in response.__class__.__name__.lower():
-                    response_text = "<streaming response>"
+                # Method 6: Check for starlette middleware streaming responses (error responses only)
+                elif (hasattr(response, '__class__') and "_StreamingResponse" in response.__class__.__name__):
+                    # Check if this is an error response
+                    if hasattr(response, 'status_code') and response.status_code >= 400:
+                        if settings.ERROR_RESPONSE_LOG_LEVEL.upper() == "DEBUG":
+                            response_text = f"<error response - {type(response).__name__}>"
+                        else:
+                            response_text = "<error response>"
+                    else:
+                        # For non-error responses with _StreamingResponse, try to get actual content
+                        # This handles cases where Starlette wraps normal responses
+                        if hasattr(response, 'body') and response.body:
+                            try:
+                                if isinstance(response.body, bytes):
+                                    response_text = response.body.decode("utf-8").replace("\n", " ")
+                                else:
+                                    response_text = str(response.body)
+                            except (AttributeError, UnicodeDecodeError):
+                                response_text = str(response.body)
+                        elif hasattr(response, 'content') and response.content:
+                            try:
+                                if isinstance(response.content, bytes):
+                                    response_text = response.content.decode("utf-8").replace("\n", " ")
+                                else:
+                                    response_text = str(response.content)
+                            except (AttributeError, UnicodeDecodeError):
+                                response_text = str(response.content)
+                        elif settings.AGGRESSIVE_CONTENT_EXTRACTION:
+                            # Try additional methods for content extraction
+                            # Some Starlette middleware responses might store content in different attributes
+                            content_found = False
+                            
+                            # Try common attribute names that might contain content
+                            for attr_name in ['data', 'json', 'text', 'raw']:
+                                if hasattr(response, attr_name):
+                                    attr_value = getattr(response, attr_name)
+                                    if attr_value:
+                                        try:
+                                            if isinstance(attr_value, bytes):
+                                                response_text = attr_value.decode("utf-8").replace("\n", " ")
+                                            elif isinstance(attr_value, dict):
+                                                import json
+                                                response_text = json.dumps(attr_value, separators=(',', ':'))
+                                            else:
+                                                response_text = str(attr_value)
+                                            content_found = True
+                                            if settings.ENABLE_RESPONSE_DEBUG:
+                                                logger.debug(f"[RESPONSE DEBUG] {request_id} | Found content in {attr_name}: {type(attr_value)}")
+                                            break
+                                        except Exception as e:
+                                            if settings.ENABLE_RESPONSE_DEBUG:
+                                                logger.debug(f"[RESPONSE DEBUG] {request_id} | Failed to extract content from {attr_name}: {e}")
+                            
+                            if not content_found:
+                                # Debug: Log what we found for troubleshooting
+                                if settings.ENABLE_RESPONSE_DEBUG:
+                                    logger.debug(f"[RESPONSE DEBUG] {request_id} | _StreamingResponse with no extractable content | Type: {type(response).__name__} | Status: {getattr(response, 'status_code', 'N/A')}")
+                                    logger.debug(f"[RESPONSE DEBUG] {request_id} | Available attrs: {[attr for attr in dir(response) if not attr.startswith('_') and not callable(getattr(response, attr))]}")
+                                response_text = "<streaming response>"
+                        else:
+                            # Debug: Log what we found for troubleshooting
+                            if settings.ENABLE_RESPONSE_DEBUG:
+                                logger.debug(f"[RESPONSE DEBUG] {request_id} | _StreamingResponse with no body/content | Type: {type(response).__name__} | Status: {getattr(response, 'status_code', 'N/A')}")
+                                logger.debug(f"[RESPONSE DEBUG] {request_id} | Available attrs: {[attr for attr in dir(response) if not attr.startswith('_') and not callable(getattr(response, attr))]}")
+                            response_text = "<streaming response>"
                 
                 # Log the response
                 if response_text and response_text.strip():
@@ -359,15 +448,23 @@ class RouteWithLogging(APIRoute):
             
             # Check for streaming responses (including FastAPI's internal streaming responses)
             if (isinstance(response, StreamingResponse) or 
-                hasattr(response, 'body_iterator') or 
-                "StreamingResponse" in str(type(response)) or
-                (hasattr(response, '__class__') and "streaming" in response.__class__.__name__.lower())):
+                (hasattr(response, 'body_iterator') and response.body_iterator and 
+                 not hasattr(response, 'body') and not hasattr(response, 'content')) or
+                (hasattr(response, '__class__') and response.__class__.__name__ == "StreamingResponse") or
+                (hasattr(response, '__class__') and "_StreamingResponse" in response.__class__.__name__ and 
+                 not hasattr(response, 'body') and not hasattr(response, 'content'))):
                 
-                # For streaming responses, log based on configuration
-                if settings.STREAMING_RESPONSE_LOG_LEVEL.upper() == "DEBUG":
-                    logger.debug(f"[RESPONSE] {request_id} | Status: {response.status_code} | <streaming response> | Type: {type(response).__name__}")
+                # For streaming responses, determine if it's an error response
+                if hasattr(response, 'status_code') and response.status_code >= 400:
+                    response_text = "<error response>"
                 else:
-                    logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | <streaming response>")
+                    response_text = "<streaming response>"
+                
+                # Log based on configuration
+                if settings.STREAMING_RESPONSE_LOG_LEVEL.upper() == "DEBUG":
+                    logger.debug(f"[RESPONSE] {request_id} | Status: {response.status_code} | {response_text} | Type: {type(response).__name__}")
+                else:
+                    logger.info(f"[RESPONSE] {request_id} | Status: {response.status_code} | {response_text}")
                 
                 # Don't try to consume the stream - just return the original response
                 return response
